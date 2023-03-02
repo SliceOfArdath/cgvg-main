@@ -1,7 +1,7 @@
 use clap::{Parser, command};
 use std::process::{Command,Output,Stdio,Child};
 use std::time::Instant;
-use std::{time, io};
+use std::io;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -23,6 +23,12 @@ struct Args {
     /// Expected result. If blank, the result is returned.
     #[arg(short,long="estrogen")]
     expect: Option<String>,
+    /// Disable time statistics. The raw times will instead be displayed.
+    #[arg(long)]
+    no_stats: bool,
+    /// Warmup rounds count.
+    #[arg(short, default_value_t=0,value_name="N")]
+    warmup: u8
 }
 
 fn build(command: Vec<&str>) -> Command {
@@ -48,25 +54,51 @@ fn finish(last: Child) -> Result<Output, io::Error> {
     return last.wait_with_output();
 }
 
-fn run_notime(iter: u8, commands: Vec<Vec<&str>>) {
+fn run_notime(iter: u8, warmup: u8, commands: Vec<Vec<&str>>, expected: Option<String>) {
+    for _ in 0..warmup {
+        let mut r = begin(commands.get(0).expect("You must have at least one command.").to_vec());
+        for i in 1..commands.len() {
+            r = link(r, commands.get(i).expect("Access Error").to_vec());
+        }
+    }
     for _ in 0..iter {
         let mut r = begin(commands.get(0).expect("You must have at least one command.").to_vec());
         for i in 1..commands.len() {
             r = link(r, commands.get(i).expect("Access Error").to_vec());
         }
-        println!("Result: {:?}", finish(r));
+        match expected {
+            None => println!("Result: {:?}", finish(r)),
+            Some(ref x) => assert_eq!(x, &String::from_utf8_lossy(&finish(r).unwrap().stdout)),
+        }
     }
 }
-fn run_time(iter: u8, commands: Vec<Vec<&str>>) {
+fn run_time(iter: u8, warmup: u8, nostats: bool, commands: Vec<Vec<&str>>, expected: Option<String>) {
+    for _ in 0..warmup {
+        let mut r = begin(commands.get(0).expect("You must have at least one command.").to_vec());
+        for i in 1..commands.len() {
+            r = link(r, commands.get(i).expect("Access Error").to_vec());
+        }
+    }
+    let mut stats: Vec<f64> = Vec::new();
     for _ in 0..iter {
         let start = Instant::now();
         let mut r = begin(commands.get(0).expect("You must have at least one command.").to_vec());
         for i in 1..commands.len() {
             r = link(r, commands.get(i).expect("Access Error").to_vec());
         }
-        println!("Result: {:?}", finish(r));
+        match expected {
+            None => println!("Result: {:?}", finish(r)),
+            Some(ref x) => assert_eq!(x, &String::from_utf8_lossy(&finish(r).unwrap().stdout)),
+        }
         let elapsed = start.elapsed();
-        println!("{}", elapsed.as_secs_f64());
+        if nostats {
+            println!("Raw Time: {}", elapsed.as_secs_f64());
+        } else {
+            stats.push(elapsed.as_secs_f64());
+        }
+    }
+    if !nostats {
+        println!("Time: {} (±{})", statistical::mean(&stats), statistical::variance(&stats, None))
     }
 }
 
@@ -77,8 +109,8 @@ fn main() {
     //todo! improve split
     println!("Commands: {:?}", command);
     if args.time {
-        run_time(args.iter, command);
+        run_time(args.iter, args.warmup, args.no_stats, command, args.expect);
     } else {
-        run_notime(args.iter, command);
+        run_notime(args.iter, args.warmup, command, args.expect);
     }
 }
