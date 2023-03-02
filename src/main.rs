@@ -1,6 +1,6 @@
-use clap::{Parser, Subcommand, ArgGroup, command};
+use clap::{Parser, command};
 use std::process::{Command,Output,Stdio,Child};
-use std::str::Split;
+use std::time::Instant;
 use std::{time, io};
 
 /// Simple program to greet a person
@@ -18,9 +18,11 @@ struct Args {
     #[arg(short,default_value_t=10,value_name="N")]
     iter: u8,
     /// Toggle timing. If present, the execution time will be returned.
-    #[arg(short)]
+    #[arg(short,long="testosterone")]
     time: bool,
-
+    /// Expected result. If blank, the result is returned.
+    #[arg(short,long="estrogen")]
+    expect: Option<String>,
 }
 
 fn build(command: Vec<&str>) -> Command {
@@ -33,11 +35,11 @@ fn build(command: Vec<&str>) -> Command {
 }
 
 //Call the first command in a call chain
-fn begin(mut first: Vec<&str>) -> Child {
+fn begin(first: Vec<&str>) -> Child {
     return build(first).stdout(Stdio::piped()).spawn().expect("Failed command");
 }
 /// Links the first command's ouput to the second's input, then starts the second command.
-fn link(first: Child, mut second: Vec<&str>) -> Child {
+fn link(first: Child, second: Vec<&str>) -> Child {
     //first.stdout(Stdio::piped());
     return build(second).stdin(first.stdout.unwrap()).stdout(Stdio::piped()).spawn().expect("Failed command");
 }
@@ -46,21 +48,37 @@ fn finish(last: Child) -> Result<Output, io::Error> {
     return last.wait_with_output();
 }
 
-fn time() {
-
+fn run_notime(iter: u8, commands: Vec<Vec<&str>>) {
+    for _ in 0..iter {
+        let mut r = begin(commands.get(0).expect("You must have at least one command.").to_vec());
+        for i in 1..commands.len() {
+            r = link(r, commands.get(i).expect("Access Error").to_vec());
+        }
+        println!("Result: {:?}", finish(r));
+    }
+}
+fn run_time(iter: u8, commands: Vec<Vec<&str>>) {
+    for _ in 0..iter {
+        let start = Instant::now();
+        let mut r = begin(commands.get(0).expect("You must have at least one command.").to_vec());
+        for i in 1..commands.len() {
+            r = link(r, commands.get(i).expect("Access Error").to_vec());
+        }
+        println!("Result: {:?}", finish(r));
+        let elapsed = start.elapsed();
+        println!("{}", elapsed.as_secs_f64());
+    }
 }
 
 fn main() {
     let args = Args::parse();
     let run = args.run;
-    let mut command: Vec<Vec<&str>> = run.iter().map(|s| s.split(" ").collect()).collect();
+    let command: Vec<Vec<&str>> = run.iter().map(|s| s.split(" ").collect()).collect();
     //todo! improve split
     println!("Commands: {:?}", command);
-    for _ in 0..args.iter {
-        let mut r = begin(command.get(0).expect("You must have at least one command.").to_vec());
-        for i in 1..command.len() {
-            r = link(r, command.get(i).expect("Access Error").to_vec());
-        }
-        println!("Result: {:?}", finish(r));
+    if args.time {
+        run_time(args.iter, command);
+    } else {
+        run_notime(args.iter, command);
     }
 }
