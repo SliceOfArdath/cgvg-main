@@ -33,14 +33,13 @@ fn build(command: Vec<&str>) -> Command {
 }
 
 //Call the first command in a call chain
-fn begin(mut first: Command) -> Child {
-    return first.stdout(Stdio::piped()).spawn().expect("Failed command");
+fn begin(mut first: Vec<&str>) -> Child {
+    return build(first).stdout(Stdio::piped()).spawn().expect("Failed command");
 }
 /// Links the first command's ouput to the second's input, then starts the second command.
-fn link(first: Child, mut second: Command) -> Child {
+fn link(first: Child, mut second: Vec<&str>) -> Child {
     //first.stdout(Stdio::piped());
-    second.stdin(first.stdout.unwrap());
-    return second.stdout(Stdio::piped()).spawn().expect("Failed command");
+    return build(second).stdin(first.stdout.unwrap()).stdout(Stdio::piped()).spawn().expect("Failed command");
 }
 ///Finishes a call stack
 fn finish(last: Child) -> Result<Output, io::Error> {
@@ -54,13 +53,13 @@ fn time() {
 fn main() {
     let args = Args::parse();
     let run = args.run;
-    let mut command: Vec<Command> = run.iter().map(|s| build(s.split(" ").collect())).collect();
+    let mut command: Vec<Vec<&str>> = run.iter().map(|s| s.split(" ").collect()).collect();
     //todo! improve split
     println!("Commands: {:?}", command);
     for _ in 0..args.iter {
-        let mut r = begin(command.get(0).expect("You must have at least one command."));
+        let mut r = begin(command.get(0).expect("You must have at least one command.").to_vec());
         for i in 1..command.len() {
-            r = link(r, command.get(i).expect("Access Error"));
+            r = link(r, command.get(i).expect("Access Error").to_vec());
         }
         println!("Result: {:?}", finish(r));
     }
