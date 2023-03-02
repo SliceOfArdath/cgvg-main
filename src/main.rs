@@ -1,19 +1,20 @@
-use clap::{Parser, command};
+use clap::{Parser, command, ArgGroup};
+use std::path::PathBuf;
 use std::process::{Command,Output,Stdio,Child};
 use std::time::Instant;
-use std::io;
+use std::{io, fs};
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(author = "SliceOfArdath", version, about = "A benchmark tool.", long_about = None)]
-//#[command(group(ArgGroup::new("mode").required(true).args(["run", "file"])))]
+#[command(group(ArgGroup::new("mode").required(true).args(["run", "file"])))]
 struct Args {
-    /// Commands to execute. If there is more than one command, they will be piped into one another.
+    /// Commands to execute. If there is more than one command, they will be piped into one another. Spaces separate commands (outside of quotations marks).
     #[arg(required=true,value_name="COMMAND")]
-    run: Vec<String>,
-    // File path. The given file should contain a command, or list of commands to chain. Each command should only take one line.
-    //#[arg(short)]
-    //file: Option<String>,
+    run: Option<Vec<String>>,
+    /// File path. The given file should contain a command, or list of commands to chain. Each command or list of commands should only take one line. Commands on the same line are separated by a pipe "|".
+    #[arg(short)]
+    file: Option<PathBuf>,
     /// Iteration count. The number of times the command is ran.
     #[arg(short,default_value_t=10,value_name="N")]
     iter: u8,
@@ -102,15 +103,31 @@ fn run_time(iter: u8, warmup: u8, nostats: bool, commands: Vec<Vec<&str>>, expec
     }
 }
 
-fn main() {
-    let args = Args::parse();
-    let run = args.run;
-    let command: Vec<Vec<&str>> = run.iter().map(|s| s.split(" ").collect()).collect();
+fn execute(args: (u8, u8, bool, bool, Option<String>), run_arg: Vec<String>) {
+    let command: Vec<Vec<&str>> = run_arg.iter().map(|s| s.split(" ").collect()).collect();
     //todo! improve split
     println!("Commands: {:?}", command);
-    if args.time {
-        run_time(args.iter, args.warmup, args.no_stats, command, args.expect);
+    if args.2 {
+        run_time(args.0, args.1, args.3, command, args.4);
     } else {
-        run_notime(args.iter, args.warmup, command, args.expect);
+        run_notime(args.0, args.1, command, args.4);
+    }  
+}
+
+fn main() {
+    let args = Args::parse();
+    match args.run {
+        Some(r) => {
+            let run = r;
+            execute((args.iter, args.warmup, args.time, args.no_stats, args.expect), run.to_vec());
+        }
+        None => {
+            let contents = fs::read_to_string(args.file.unwrap()).expect("Failed reading the file.");
+            let command_list: Vec<&str> = contents.split("\n").collect();
+            for command in command_list {
+                let to_run = command.split("|").map(|s| String::from(s)).collect();
+                execute((args.iter, args.warmup, args.time, args.no_stats, args.expect.clone()), to_run);
+            }
+        }
     }
 }
