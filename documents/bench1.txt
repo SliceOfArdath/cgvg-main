@@ -1,0 +1,2 @@
+../gmatch/target/release/gmatch"(?i)Sherlock Holmes"../tools/subtitles/en.sample.txt"-cj
+rg"Sherlock Holmes"../tools/subtitles/en.sample.txt"-ci

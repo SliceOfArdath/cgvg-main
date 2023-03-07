@@ -28,7 +28,7 @@ struct Args {
     #[arg(long)]
     no_stats: bool,
     /// Warmup rounds count.
-    #[arg(short, default_value_t=0,value_name="N")]
+    #[arg(short, default_value_t=3,value_name="N")]
     warmup: u8
 }
 
@@ -68,7 +68,7 @@ fn run_notime(iter: u8, warmup: u8, commands: Vec<Vec<&str>>, expected: Option<S
             r = link(r, commands.get(i).expect("Access Error").to_vec());
         }
         match expected {
-            None => println!("Result: {:?}", finish(r)),
+            None => println!("Result: {:?}", String::from_utf8_lossy(&finish(r).unwrap().stdout)),
             Some(ref x) => assert_eq!(x, &String::from_utf8_lossy(&finish(r).unwrap().stdout)),
         }
     }
@@ -79,6 +79,7 @@ fn run_time(iter: u8, warmup: u8, nostats: bool, commands: Vec<Vec<&str>>, expec
         for i in 1..commands.len() {
             r = link(r, commands.get(i).expect("Access Error").to_vec());
         }
+        finish(r).unwrap();
     }
     let mut stats: Vec<f64> = Vec::new();
     for _ in 0..iter {
@@ -88,7 +89,7 @@ fn run_time(iter: u8, warmup: u8, nostats: bool, commands: Vec<Vec<&str>>, expec
             r = link(r, commands.get(i).expect("Access Error").to_vec());
         }
         match expected {
-            None => println!("Result: {:?}", finish(r)),
+            None => println!("Result: {:?}", String::from_utf8_lossy(&finish(r).unwrap().stdout)),
             Some(ref x) => assert_eq!(x, &String::from_utf8_lossy(&finish(r).unwrap().stdout)),
         }
         let elapsed = start.elapsed();
@@ -104,7 +105,7 @@ fn run_time(iter: u8, warmup: u8, nostats: bool, commands: Vec<Vec<&str>>, expec
 }
 
 fn execute(args: (u8, u8, bool, bool, Option<String>), run_arg: Vec<String>) {
-    let command: Vec<Vec<&str>> = run_arg.iter().map(|s| s.split(" ").collect()).collect();
+    let command: Vec<Vec<&str>> = run_arg.iter().map(|s| s.split("\"").collect()).collect();
     //todo! improve split
     println!("Commands: {:?}", command);
     if args.2 {
@@ -122,7 +123,7 @@ fn main() {
             execute((args.iter, args.warmup, args.time, args.no_stats, args.expect), run.to_vec());
         }
         None => {
-            let contents = fs::read_to_string(args.file.unwrap()).expect("Failed reading the file.");
+            let contents = fs::read_to_string(&args.file.unwrap()).expect("Failed reading the file.");
             let command_list: Vec<&str> = contents.split("\n").collect();
             for command in command_list {
                 let to_run = command.split("|").map(|s| String::from(s)).collect();
