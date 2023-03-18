@@ -126,7 +126,7 @@ fn main() {
             let contents = fs::read_to_string(&args.file.unwrap()).expect("Failed reading the file.");
             let command_list: Vec<&str> = contents.split("\n").collect();
             for command in command_list {
-                let to_run = command.split("|").map(|s| String::from(s)).collect();
+                let to_run = command.split("\"|\"").map(|s| String::from(s)).collect();
                 execute((args.iter, args.warmup, args.time, args.no_stats, args.expect.clone()), to_run);
             }
         }
